@@ -186,8 +186,8 @@ public final class USBMonitor {
 				context.registerReceiver(mUsbReceiver, filter);
 			}
 			// start connection check
-			mDeviceCounts = 0;
-			mAsyncHandler.postDelayed(mDeviceCheckRunnable, 1000);
+			// mDeviceCounts = 0;
+			// mAsyncHandler.postDelayed(mDeviceCheckRunnable, 1000);
 		}
 	}
 
@@ -311,7 +311,7 @@ public final class USBMonitor {
 		// get detected devices
 		final HashMap<String, UsbDevice> deviceList = mUsbManager.getDeviceList();
 		// store those devices info before matching filter xml file
-		String fileName = Environment.getExternalStorageDirectory().getAbsolutePath()+ "/USBCamera/failed_devices.txt";
+		/*String fileName = Environment.getExternalStorageDirectory().getAbsolutePath()+ "/VT/failed_devices.txt";
 
 		File logFile = new File(fileName);
 		if(!logFile.getParentFile().exists()) {
@@ -334,7 +334,7 @@ public final class USBMonitor {
 		}
 		if(fw != null) {
 			pw = new PrintWriter(fw);
-		}
+		} */
 		final List<UsbDevice> result = new ArrayList<UsbDevice>();
 		if (deviceList != null) {
 			if ((filters == null) || filters.isEmpty()) {
@@ -355,7 +355,8 @@ public final class USBMonitor {
 							String devSystemVersion = android.os.Build.VERSION.RELEASE;
 							String devClass = String.valueOf(device.getDeviceClass());
 							String subClass = String.valueOf(device.getDeviceSubclass());
-							try{
+							/*try{
+								/*
 								if(pw != null) {
 									StringBuilder sb = new StringBuilder();
 									sb.append(devModel);
@@ -369,12 +370,13 @@ public final class USBMonitor {
 								}
 							}catch (IOException e) {
 								e.printStackTrace();
-							}
+							}*/
 						}
 					}
 				}
 			}
 		}
+		/*
 		if (pw != null) {
 			pw.close();
 		}
@@ -384,7 +386,7 @@ public final class USBMonitor {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-		}
+		}*/
 		return result;
 	}
 
@@ -485,19 +487,15 @@ public final class USBMonitor {
 	 * @return true if fail to request permission
 	 */
 	public synchronized boolean requestPermission(final UsbDevice device) {
-//		if (DEBUG) Log.v(TAG, "requestPermission:device=" + device);
 		boolean result = false;
 		if (isRegistered()) {
 			if (device != null) {
 				if (mUsbManager.hasPermission(device)) {
-					// call onConnect if app already has permission
 					processConnect(device);
 				} else {
 					try {
-						// パーミッションがなければ要求する
 						mUsbManager.requestPermission(device, mPermissionIntent);
 					} catch (final Exception e) {
-						// Android5.1.xのGALAXY系でandroid.permission.sec.MDM_APP_MGMTという意味不明の例外生成するみたい
 						Log.w(TAG, e);
 						processCancel(device);
 						result = true;
@@ -558,7 +556,8 @@ public final class USBMonitor {
 				}
 			} else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
 				final UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-				updatePermission(device, hasPermission(device));
+				requestPermission(device);
+				//updatePermission(device, hasPermission(device));
 				processAttach(device);
 			} else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
 				// when device removed
@@ -730,7 +729,11 @@ public final class USBMonitor {
 		if (useNewAPI && BuildCheck.isAndroid5()) {
 			sb.append("#");
 			if (TextUtils.isEmpty(serial)) {
-				sb.append(device.getSerialNumber());	sb.append("#");	// API >= 21
+				// API >= 21
+				try {
+					sb.append(device.getSerialNumber());
+					sb.append("#");
+				} catch (Exception e) {}
 			}
 			sb.append(device.getManufacturerName());	sb.append("#");	// API >= 21
 			sb.append(device.getConfigurationCount());	sb.append("#");	// API >= 21
@@ -1056,6 +1059,7 @@ public final class USBMonitor {
 			}
 			mBusNum = busnum;
 			mDevNum = devnum;
+			try {
 //			if (DEBUG) {
 				if (mConnection != null) {
 					final int desc = mConnection.getFileDescriptor();
@@ -1064,6 +1068,9 @@ public final class USBMonitor {
 				} else {
 					Log.e(TAG, "could not connect to device " + name);
 				}
+			} catch (Throwable e){
+				Log.e(TAG, "UsbControlBlock Throwable:" + e.toString());
+			}
 //			}
 		}
 

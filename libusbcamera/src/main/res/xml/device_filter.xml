@@ -28,6 +28,7 @@
 	<!-- a few android 9.0 -->
 	<usb-device class="14" subclass="9" />
 	<usb-device class="2" subclass="0" />
+  	<usb-device class="0" subclass="9" />
 	<usb-device class="6" subclass="-1" />
 	<usb-device class="39" subclass="0" />
 	<usb-device product-id="4836" vendor-id="9573" />
