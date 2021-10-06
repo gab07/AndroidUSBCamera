@@ -186,8 +186,8 @@ public final class USBMonitor {
 				context.registerReceiver(mUsbReceiver, filter);
 			}
 			// start connection check
-			// mDeviceCounts = 0;
-			// mAsyncHandler.postDelayed(mDeviceCheckRunnable, 1000);
+			 mDeviceCounts = 0;
+			 mAsyncHandler.postDelayed(mDeviceCheckRunnable, 1000);
 		}
 	}
 

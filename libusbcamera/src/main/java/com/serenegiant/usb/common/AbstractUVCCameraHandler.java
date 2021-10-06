@@ -60,7 +60,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
  */
 public abstract class AbstractUVCCameraHandler extends Handler {
 
-    private static final boolean DEBUG = true;    // TODO set false on release
+    private static final boolean DEBUG = false;    // TODO set false on release
     private static final String TAG = "AbsUVCCameraHandler";
 
 
@@ -83,6 +83,7 @@ public abstract class AbstractUVCCameraHandler extends Handler {
 
     public static OnEncodeResultListener mListener;
     public static OnPreViewResultListener mPreviewListener;
+    public static OnFrameListener mFrameListener;
     public static OnCaptureListener mCaptureListener;
 
     public interface OnEncodeResultListener {
@@ -93,6 +94,11 @@ public abstract class AbstractUVCCameraHandler extends Handler {
 
     public interface OnPreViewResultListener {
         void onPreviewResult(byte[] data);
+    }
+
+    public interface OnFrameListener {
+        void onFrame(ByteBuffer frame);
+        void onPreviewSizeChanged(int width, int height);
     }
 
     public interface OnCaptureListener {
@@ -109,6 +115,7 @@ public abstract class AbstractUVCCameraHandler extends Handler {
     private static final int MSG_MEDIA_UPDATE = 7;
     private static final int MSG_RELEASE = 9;
     private static final int MSG_CAMERA_FOUCS = 10;
+    private static final int MSG_CAMERA_RESIZE = 11;
     // 音频线程
 //	private static final int MSG_AUDIO_START = 10;
 //	private static final int MSG_AUDIO_STOP = 11;
@@ -189,7 +196,7 @@ public abstract class AbstractUVCCameraHandler extends Handler {
     // 切换分辨率
     public void resize(final int width, final int height) {
         checkReleased();
-        throw new UnsupportedOperationException("does not support now");
+        sendMessage(obtainMessage(MSG_CAMERA_RESIZE, width, width));
     }
 
     // 开启Camera预览
@@ -200,6 +207,10 @@ public abstract class AbstractUVCCameraHandler extends Handler {
         }
 
         sendMessage(obtainMessage(MSG_PREVIEW_START, surface));
+    }
+
+    public void setOnFrameListener(OnFrameListener listener) {
+        AbstractUVCCameraHandler.mFrameListener = listener;
     }
 
     public void setOnPreViewResultListener(OnPreViewResultListener listener) {
@@ -389,6 +400,8 @@ public abstract class AbstractUVCCameraHandler extends Handler {
             case MSG_CAMERA_FOUCS:
                 thread.handleCameraFoucs();
                 break;
+            case MSG_CAMERA_RESIZE:
+                thread.handleResize(msg.arg1, msg.arg2);
             default:
                 throw new RuntimeException("unsupported message:what=" + msg.what);
         }
@@ -509,6 +522,14 @@ public abstract class AbstractUVCCameraHandler extends Handler {
             return (mUVCCamera != null) && (mUVCCamera.getDevice() != null) && mUVCCamera.getDevice().equals(device);
         }
 
+        public void handleResize(int width, int height) {
+            if (mUVCCamera != null) {
+                mUVCCamera.setPreviewSize(width, height);
+                mWidth = width;
+                mHeight = height;
+            }
+        }
+
         public void handleOpen(final USBMonitor.UsbControlBlock ctrlBlock) {
             if (DEBUG) Log.v(TAG_THREAD, "handleOpen:");
             handleClose();
@@ -545,14 +566,24 @@ public abstract class AbstractUVCCameraHandler extends Handler {
             if (DEBUG) Log.v(TAG_THREAD, "handleStartPreview:");
             if ((mUVCCamera == null) || mIsPreviewing) return;
             try {
+                if (mWidth == 0 || mHeight == 0) {
+                    Size size = getPreviewSize(mUVCCamera.getSupportedSizeList());
+                    mWidth = size.width;
+                    mHeight = size.height;
+                    if (mFrameListener != null) {
+                        mFrameListener.onPreviewSizeChanged(mWidth, mHeight);
+                    }
+                    if (DEBUG) Log.v(TAG_THREAD, "Previewing w: " + mWidth + " h: " + mHeight);
+                }
                 mUVCCamera.setPreviewSize(mWidth, mHeight, 1, 31, mPreviewMode, mBandwidthFactor);
                 // 获取USB Camera预览数据，使用NV21颜色会失真
                 // 无论使用YUV还是MPEG，setFrameCallback的设置效果一致
-//				mUVCCamera.setFrameCallback(mIFrameCallback, UVCCamera.PIXEL_FORMAT_NV21);
+				//mUVCCamera.setFrameCallback(mIFrameCallback, UVCCamera.PIXEL_FORMAT_NV21);
                 mUVCCamera.setFrameCallback(mIFrameCallback, UVCCamera.PIXEL_FORMAT_YUV420SP);
             } catch (final IllegalArgumentException e) {
                 try {
                     // fallback to YUV mode
+                    if (DEBUG) Log.v(TAG_THREAD, "Fallback to YUV mode");
                     mUVCCamera.setPreviewSize(mWidth, mHeight, 1, 31, UVCCamera.DEFAULT_PREVIEW_MODE, mBandwidthFactor);
                 } catch (final IllegalArgumentException e1) {
                     callOnError(e1);
@@ -816,31 +847,35 @@ public abstract class AbstractUVCCameraHandler extends Handler {
 //					videoEncoder.frameAvailableSoon();
 //					videoEncoder.encode(frame);
 //				}
-                int len = frame.capacity();
-                final byte[] yuv = new byte[len];
-                frame.get(yuv);
-                // nv21 yuv data callback
-                if (mPreviewListener != null) {
-                    mPreviewListener.onPreviewResult(yuv);
-                }
-                // picture
-                if (isCaptureStill && !TextUtils.isEmpty(picPath)) {
-                    isCaptureStill = false;
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            saveYuv2Jpeg(picPath, yuv);
-                        }
-                    }).start();
-                }
-                // video
-                if (mH264Consumer != null) {
-                    // overlay
-                    if(isSupportOverlay) {
-                        TxtOverlay.getInstance().overlay(yuv, new SimpleDateFormat("yyyy-MM-dd EEEE HH:mm:ss").format(new Date()));
+                if (mFrameListener != null) {
+                    mFrameListener.onFrame(frame);
+                } else {
+                    int len = frame.capacity();
+                    final byte[] yuv = new byte[len];
+                    frame.get(yuv);
+                    // nv21 yuv data callback
+                    if (mPreviewListener != null) {
+                        mPreviewListener.onPreviewResult(yuv);
                     }
+                    // picture
+                    if (isCaptureStill && !TextUtils.isEmpty(picPath)) {
+                        isCaptureStill = false;
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                saveYuv2Jpeg(picPath, yuv);
+                            }
+                        }).start();
+                    }
+                    // video
+                    if (mH264Consumer != null) {
+                        // overlay
+                        if(isSupportOverlay) {
+                            TxtOverlay.getInstance().overlay(yuv, new SimpleDateFormat("yyyy-MM-dd EEEE HH:mm:ss").format(new Date()));
+                        }
 
-                    mH264Consumer.setRawYuv(yuv, mWidth, mHeight);
+                        mH264Consumer.setRawYuv(yuv, mWidth, mHeight);
+                    }
                 }
             }
         };
@@ -1064,6 +1099,43 @@ public abstract class AbstractUVCCameraHandler extends Handler {
                 mHandler = null;
                 mSync.notifyAll();
             }
+        }
+
+        private Size getPreviewSize(List<Size> supportedSizeList) {
+            int preferredWidth = 1920;
+            int preferredHeight = 1080;
+            int maxw = 0;
+            int maxh = 0;
+            int index = 0;
+
+            for (int i = 0; i < supportedSizeList.size(); ++i) {
+                Size size = supportedSizeList.get(i);
+                if (size.width >= maxw && size.height >= maxh) {
+                    if (size.width <= preferredWidth && size.height <= preferredHeight) {
+                        maxw = size.width;
+                        maxh = size.height;
+                        index = i;
+                    }
+                }
+            }
+
+            if (maxw == 0 || maxh == 0) {
+                // Not found a smaller resolution close to the preferred
+                // So choose the lowest resolution possible
+                Size size = supportedSizeList.get(0);
+                int minw = size.width;
+                int minh = size.height;
+                for (int i = 1; i < supportedSizeList.size(); ++i) {
+                    size = supportedSizeList.get(i);
+                    if (size.width <= minw && size.height <= minh) {
+                        minw = size.width;
+                        minh = size.height;
+                        index = i;
+                    }
+                }
+            }
+
+            return supportedSizeList.get(index);
         }
 
         private void callOnOpen() {
