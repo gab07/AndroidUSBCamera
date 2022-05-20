@@ -3,7 +3,6 @@ package com.serenegiant.usb.common;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
@@ -50,7 +49,6 @@ import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -566,15 +564,13 @@ public abstract class AbstractUVCCameraHandler extends Handler {
             if (DEBUG) Log.v(TAG_THREAD, "handleStartPreview:");
             if ((mUVCCamera == null) || mIsPreviewing) return;
             try {
-                if (mWidth == 0 || mHeight == 0) {
-                    Size size = getPreviewSize(mUVCCamera.getSupportedSizeList());
-                    mWidth = size.width;
-                    mHeight = size.height;
-                    if (mFrameListener != null) {
-                        mFrameListener.onPreviewSizeChanged(mWidth, mHeight);
-                    }
-                    if (DEBUG) Log.v(TAG_THREAD, "Previewing w: " + mWidth + " h: " + mHeight);
+                Size size = getPreviewSize(mUVCCamera.getSupportedSizeList(), mWidth, mHeight);
+                mWidth = size.width;
+                mHeight = size.height;
+                if (mFrameListener != null) {
+                    mFrameListener.onPreviewSizeChanged(mWidth, mHeight);
                 }
+                if (DEBUG) Log.v(TAG_THREAD, "Previewing w: " + mWidth + " h: " + mHeight);
                 mUVCCamera.setPreviewSize(mWidth, mHeight, 1, 31, mPreviewMode, mBandwidthFactor);
                 // 获取USB Camera预览数据，使用NV21颜色会失真
                 // 无论使用YUV还是MPEG，setFrameCallback的设置效果一致
@@ -1101,9 +1097,9 @@ public abstract class AbstractUVCCameraHandler extends Handler {
             }
         }
 
-        private Size getPreviewSize(List<Size> supportedSizeList) {
-            int preferredWidth = 1920;
-            int preferredHeight = 1080;
+        private Size getPreviewSize(List<Size> supportedSizeList, Integer targetWidth, Integer targetHeight) {
+            int preferredWidth = targetWidth != null ? targetWidth : 1920;
+            int preferredHeight = targetHeight != null ? targetHeight : 1080;
             int maxw = 0;
             int maxh = 0;
             int index = 0;
