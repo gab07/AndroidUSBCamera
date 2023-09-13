@@ -30,20 +30,14 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    repositories {
-        flatDir {
-            dirs 'libs'
-        }
-    }
 }
 
 
 dependencies {
-    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation fileTree(include: ['*.jar', '*.aar'], dir: 'libs')
 
     implementation "androidx.appcompat:appcompat:${androidXVersion}"
 
-    implementation(name: 'libusbcommon_v4.1.1', ext: 'aar')
 }
 
 
