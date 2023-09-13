@@ -1,6 +1,5 @@
 apply plugin: 'com.android.library'
-apply plugin: 'com.github.dcendents.android-maven'
-group='com.github.gab07'
+apply plugin: 'maven-publish'
 
 def _ext = rootProject.ext
 def _compileSdkVersion = _ext.has('compileSdkVersion') ? _ext.compileSdkVersion : 30
@@ -12,8 +11,6 @@ android {
     defaultConfig {
         minSdkVersion _minSdkVersion
         targetSdkVersion _targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // "armeabi-v7a" can adapter most of the devices
@@ -48,3 +45,19 @@ dependencies {
 
     implementation(name: 'libusbcommon_v4.1.1', ext: 'aar')
 }
+
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'com.github.gab07'
+            artifactId = 'library'
+            version = '2.4.3'
+
+            afterEvaluate {
+                from components.release
+            }
+        }
+    }
+}
+
